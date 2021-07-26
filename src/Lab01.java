@@ -1,7 +1,7 @@
 /*=============================================================================
  |   Assignment:  Lab 01 - Building a Prim's MST for an input graph
  |
- |       Author:  Alexander Davila-Wollheim & Rickie
+ |       Author:  Alexander Davila-Wollheim & Rickie Mobley
  |     Language:  Java
  |
  |   To Compile:  javac Lab01.java
@@ -26,109 +26,254 @@ we need to parse the vertex, what theyre connected to, and the weight [v , c , w
 need to count the number of vertices to pass into our graph to make it,
  */
 
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.LinkedList;
 import java.io.File;
-import java.io.IOException;
 import java.util.Scanner;
 
-public class Lab01 {
-    public static void main(String args[]) throws IOException
-    {
-        File file = new File(args[0]);
-        Scanner scan  = new Scanner(file);
-        int numVertices = Integer.parseInt(scan.nextLine().trim());
-        double aList[][] = new double[numVertices][numVertices];
-        int edges = Integer.parseInt(scan.nextLine().trim());
-        for(int i=0; i<edges; i++)
-        {
-            String line[] = scan.nextLine().split(" ");
-            int from = Integer.parseInt(line[0]);
-            int to = Integer.parseInt(line[1]);
-            double w = Double.parseDouble(line[2]);
-            aList[from][to]=w;
-            aList[to][from]=w;
-        }
+class Lab01 {
 
-        findMST(aList,numVertices);
+    static class Edges {
+        int to;
+        int from;
+        double weight;
+
+        public Edges(int to, int from, double weight) {
+            this.to = to;
+            this.from = from;
+            this.weight = weight;
+        }
     }
 
-    //finds vertex with cheapest path
-    static int findMinVertex(double[] cost, boolean[] edgesToUseInMST, int numOfVertices) {
-        //minimum vertex to return
-        int vertex = 0;
-        //initial minimum value
-        double cheapestEdge = Integer.MAX_VALUE;
+    static class HeapNodes {
+        int vertex;
+        double key;
+    }
 
-        //iterate through all vertices
-        for (int i = 0; i < numOfVertices; i++){
-            //visit unvisited vertices and change to true bc it will be used in the MST so set to true (true meaning this edge will
-            // be used)
-            if(edgesToUseInMST[i]==false && cost[i]<cheapestEdge){
-                //vertex has been visited
-                //set the new min vertex
-                vertex = i;
-                //set the cheapest edge weight
-                cheapestEdge = cost[i];
-                //System.out.println("the minimum cost at i is " + cost[i] + "and vertex is " + vertex);
+    static class ResultSets {
+        int parent;
+        double weight;
+    }
+
+    public static class Graph {
+        int vertices;
+        LinkedList<Edges>[] adjacencylist;
+        //ArrayList<LinkedList<Edges>> adjacencylist;
+
+        Graph(int vertices) {
+            this.vertices = vertices;
+            adjacencylist = new LinkedList[vertices];
+            //initialize adjacency lists for all the vertices
+            for (int i = 0; i < vertices; i++) {
+                adjacencylist[i] = new LinkedList<>();
             }
         }
 
-        return vertex;
+        public void addEdge(int to, int from, double weight) {
+            Edges edge = new Edges(to, from, weight);
+            adjacencylist[to].addFirst(edge);
 
-    }
+            edge = new Edges(from, to, weight);
+            adjacencylist[from].addFirst(edge); //for undirected graph
+        }
 
-    static void findMST(double[][] aList, int numVertices) {
+        public void primMSTs() {
 
-        int infinity = Integer.MAX_VALUE;
-        //parent of each edge in the MST
-        int pathCostFromParent[] = new int[numVertices];
-        //weight of the each edge
-        double cost[] = new double[numVertices];
+            boolean[] inHeap = new boolean[vertices];
+            ResultSets[] resultSet = new ResultSets[vertices];
+            //keys[] used to store the key to know whether min hea update is required
+            Double[] key = new Double[vertices];
+            //create heapNode for all the vertices
+            HeapNodes[] heapNodes = new HeapNodes[vertices];
+            for (int i = 0; i < vertices; i++) {
+                heapNodes[i] = new HeapNodes();
+                heapNodes[i].vertex = i;
+                heapNodes[i].key = Integer.MAX_VALUE;
+                resultSet[i] = new ResultSets();
+                resultSet[i].parent = -1;
+                inHeap[i] = true;
+                key[i] = Double.MAX_VALUE;
+            }
 
-        //initial cost for all edges is infinite. populate cost array with infinity
-        for (int i = 0; i<numVertices; i++)
-            cost[i] = infinity;
+            //decrease the key for the first index
+            heapNodes[0].key = 0;
 
-        //boolean array tells which edges will be in the MST
-        boolean edgesToUseInMST[] = new boolean[numVertices];
+            //add all the vertices to the MinHeap
+            MinHeap minHeap = new MinHeap(vertices);
+            //add all the vertices to priority queue
+            for (int i = 0; i < vertices; i++) {
+                minHeap.insert(heapNodes[i]);
+            }
 
-        //int lowestValueVertex;
+            //while minHeap is not empty
+            while (!minHeap.isEmpty()) {
+                //extract the min
+                HeapNodes extractedNode = minHeap.extractMin();
 
-        pathCostFromParent[0] = -1;
-        //path cost for parent node is 0
-        cost[0] = 0;
+                //extracted vertex
+                int extractedVertex = extractedNode.vertex;
+                inHeap[extractedVertex] = false;
 
-        for(int i = 0; i < numVertices-1; i++){
-            int lowestValueVertex = findMinVertex(cost, edgesToUseInMST, numVertices);
-            edgesToUseInMST[lowestValueVertex] = true;
-
-            //loop through the grid to-from perspective
-            for(int j = 0; j<numVertices; j++){
-                //check that weight at to-from position isnt empty and that it has not
-                //been included yet in the in the boolean array
-                if(aList[lowestValueVertex][j]!=0 && edgesToUseInMST[j] == false && aList[lowestValueVertex][j] < cost[j]){
-                    //set new min cost in our cost array as the one to use in our list
-                    cost[j] = aList[lowestValueVertex][j];
-                    //add the vertex as part of the path to take
-                    pathCostFromParent[j] = lowestValueVertex;
-                    //System.out.println(pathCostFromParent[j]);
+                //iterate through all the adjacent vertices
+                LinkedList<Edges> list = adjacencylist[extractedVertex];
+                for (Edges edge : list) {
+                    //only if edge destination is present in heap
+                    if (inHeap[edge.from]) {
+                        int from = edge.from;
+                        double newKey = edge.weight;
+                        //check if updated key < existing key, if yes, update if
+                        if (key[from] > newKey) {
+                            decreaseKey(minHeap, newKey, from);
+                            //update the parent node for destination
+                            resultSet[from].parent = extractedVertex;
+                            resultSet[from].weight = newKey;
+                            key[from] = newKey;
+                        }
+                    }
                 }
             }
+            //print mst
+            printMST(resultSet);
         }
 
-        printMST(pathCostFromParent , aList, numVertices);
+        public void decreaseKey(MinHeap minHeap, double newKey, int vertex) {
 
-    }
+            //get the index which key's needs a decrease;
+            int index = minHeap.indexes[vertex];
 
-    static void printMST(int[] pathCostFromParent, double[][] grid, int numOfVertices) {
-        double totalPathCost=0;
-
-        for(int i = 1; i < numOfVertices; i++){
-            //System.out.println(pathCostFromParent[7]);
-            System.out.println(pathCostFromParent[i] + "-" + i + " " + grid[pathCostFromParent[i]][i] );
-            totalPathCost += grid[pathCostFromParent[i]][i];
+            //get the node and update its value
+            HeapNodes node = minHeap.mH[index];
+            node.key = newKey;
+            minHeap.bubbleUp(index);
         }
 
-        System.out.println(totalPathCost);
+        public void printMST(ResultSets[] resultSet) {
+            double totalCostMST = 0.0;
+            DecimalFormat finalFormat = new DecimalFormat();
+            finalFormat.setMaximumFractionDigits(5);
 
+            for (int i = 1; i < vertices; i++) {
+                System.err.println(i + "-" + resultSet[i].parent + " " + resultSet[i].weight);
+                totalCostMST += resultSet[i].weight;
+            }
+
+            System.out.println(finalFormat.format(totalCostMST));
+        }
     }
+
+    static class MinHeap {
+        int capacity;
+        int currentSize;
+        HeapNodes[] mH;
+        int[] indexes; //will be used to decrease the key
+
+
+        public MinHeap(int capacity) {
+            this.capacity = capacity;
+            mH = new HeapNodes[capacity + 1];
+            indexes = new int[capacity];
+            mH[0] = new HeapNodes();
+            mH[0].key = Integer.MIN_VALUE;
+            mH[0].vertex = -1;
+            currentSize = 0;
+        }
+
+
+        public void insert(HeapNodes x) {
+            currentSize++;
+            int idx = currentSize;
+            mH[idx] = x;
+            indexes[x.vertex] = idx;
+            bubbleUp(idx);
+        }
+
+        public void bubbleUp(int pos) {
+            int parentIdx = pos / 2;
+            int currentIdx = pos;
+            while (currentIdx > 0 && mH[parentIdx].key > mH[currentIdx].key) {
+                HeapNodes currentNode = mH[currentIdx];
+                HeapNodes parentNode = mH[parentIdx];
+
+                //swap the positions
+                indexes[currentNode.vertex] = parentIdx;
+                indexes[parentNode.vertex] = currentIdx;
+                swap(currentIdx, parentIdx);
+                currentIdx = parentIdx;
+                parentIdx = parentIdx / 2;
+            }
+        }
+
+        public HeapNodes extractMin() {
+            HeapNodes min = mH[1];
+            HeapNodes lastNode = mH[currentSize];
+//            update the indexes[] and move the last node to the top
+            indexes[lastNode.vertex] = 1;
+            mH[1] = lastNode;
+            mH[currentSize] = null;
+            sinkDown(1);
+            currentSize--;
+            return min;
+        }
+
+        public void sinkDown(int k) {
+            int smallest = k;
+            int leftChildIdx = 2 * k;
+            int rightChildIdx = 2 * k + 1;
+            if (leftChildIdx < heapSize() && mH[smallest].key > mH[leftChildIdx].key) {
+                smallest = leftChildIdx;
+            }
+            if (rightChildIdx < heapSize() && mH[smallest].key > mH[rightChildIdx].key) {
+                smallest = rightChildIdx;
+            }
+            if (smallest != k) {
+
+                HeapNodes smallestNode = mH[smallest];
+                HeapNodes kNode = mH[k];
+
+                //swap the positions
+                indexes[smallestNode.vertex] = k;
+                indexes[kNode.vertex] = smallest;
+                swap(k, smallest);
+                sinkDown(smallest);
+            }
+        }
+
+        public void swap(int a, int b) {
+            HeapNodes temp = mH[a];
+            mH[a] = mH[b];
+            mH[b] = temp;
+        }
+
+        public boolean isEmpty() {
+            return currentSize == 0;
+        }
+
+        public int heapSize() {
+            return currentSize;
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        File file = new File(args[0]);
+        Scanner scan = new Scanner(file);
+        int numVertices = Integer.parseInt(scan.nextLine());
+        int numEdges = Integer.parseInt(scan.nextLine());
+
+        Graph graph = new Graph(numVertices);
+
+        for (int i = 1; i <= numEdges; i++) {
+
+            String edgeAndWeight[] = scan.nextLine().split(" ");
+
+            int to = Integer.parseInt(edgeAndWeight[0]);
+            int from = Integer.parseInt(edgeAndWeight[1]);
+            double weight = Double.parseDouble(edgeAndWeight[2]);
+            graph.addEdge(to, from, weight);
+
+        }
+        graph.primMSTs();
+    }
+
+
 }
